@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Generic, TypeVar
 from datetime import datetime
 
 
@@ -31,3 +31,13 @@ class TriggerResponse(TriggerBase):
     id: str
     created_at: datetime
     updated_at: datetime
+
+
+T = TypeVar('T')
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int

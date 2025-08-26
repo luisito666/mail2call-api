@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List
+import math
 from app.database.connection import get_db_connection
 from app.crud.email_events import EmailEventCRUD
-from app.schemas.email_events import EmailEventCreate, EmailEventUpdate, EmailEventResponse
+from app.schemas.email_events import EmailEventCreate, EmailEventUpdate, EmailEventResponse, PaginatedResponse
 from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/email-events", tags=["email-events"])
@@ -32,14 +33,28 @@ async def get_email_event(
     return email_event
 
 
-@router.get("/", response_model=List[EmailEventResponse])
+@router.get("/", response_model=PaginatedResponse[EmailEventResponse])
 async def get_email_events(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    per_page: int = Query(10, ge=1, le=100, description="Items per page (max 100)"),
     db=Depends(get_db_connection),
     current_user=Depends(get_current_user)
 ):
-    return await EmailEventCRUD.get_all(db, skip, limit)
+    skip = (page - 1) * per_page
+    
+    # Get total count and items in parallel
+    total = await EmailEventCRUD.get_total_count(db)
+    items = await EmailEventCRUD.get_all(db, skip, per_page)
+    
+    total_pages = math.ceil(total / per_page)
+    
+    return PaginatedResponse[EmailEventResponse](
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages
+    )
 
 
 @router.get("/by-status/{status}", response_model=List[EmailEventResponse])

@@ -44,6 +44,11 @@ class ContactGroupCRUD:
         return [ContactGroupResponse(**dict(row)) for row in rows]
     
     @staticmethod
+    async def get_total_count(db: asyncpg.Connection) -> int:
+        query = "SELECT COUNT(*) FROM contact_groups"
+        return await db.fetchval(query)
+    
+    @staticmethod
     async def update(db: asyncpg.Connection, contact_group_id: str, contact_group_update: ContactGroupUpdate) -> Optional[ContactGroupResponse]:
         # Build dynamic update query based on provided fields
         update_fields = []

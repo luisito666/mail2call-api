@@ -47,6 +47,11 @@ class ContactCRUD:
         return [ContactResponse(**dict(row)) for row in rows]
     
     @staticmethod
+    async def get_total_count(db: asyncpg.Connection) -> int:
+        query = "SELECT COUNT(*) FROM contacts"
+        return await db.fetchval(query)
+    
+    @staticmethod
     async def get_by_group_id(db: asyncpg.Connection, group_id: str) -> List[ContactResponse]:
         query = """
             SELECT id, name, phone_number, priority, is_active, role, department, group_ids, created_at, updated_at

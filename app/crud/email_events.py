@@ -45,6 +45,11 @@ class EmailEventCRUD:
         return [EmailEventResponse(**dict(row)) for row in rows]
     
     @staticmethod
+    async def get_total_count(db: asyncpg.Connection) -> int:
+        query = "SELECT COUNT(*) FROM email_events"
+        return await db.fetchval(query)
+    
+    @staticmethod
     async def get_by_status(db: asyncpg.Connection, status: str) -> List[EmailEventResponse]:
         query = """
             SELECT id, from_email, subject, body, trigger_matched, received_at, processed_at, status

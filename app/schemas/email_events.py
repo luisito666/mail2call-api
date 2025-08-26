@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Generic, TypeVar
 from datetime import datetime
 
 
@@ -27,3 +27,13 @@ class EmailEventResponse(EmailEventBase):
     id: str
     received_at: datetime
     processed_at: Optional[datetime] = None
+
+
+T = TypeVar('T')
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int

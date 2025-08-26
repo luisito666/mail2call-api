@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List
+import math
 from app.database.connection import get_db_connection
 from app.crud.contact_groups import ContactGroupCRUD
-from app.schemas.contact_groups import ContactGroupCreate, ContactGroupUpdate, ContactGroupResponse
+from app.schemas.contact_groups import ContactGroupCreate, ContactGroupUpdate, ContactGroupResponse, PaginatedResponse
 from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/contact-groups", tags=["contact-groups"])
@@ -32,14 +33,28 @@ async def get_contact_group(
     return contact_group
 
 
-@router.get("/", response_model=List[ContactGroupResponse])
+@router.get("/", response_model=PaginatedResponse[ContactGroupResponse])
 async def get_contact_groups(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    per_page: int = Query(10, ge=1, le=100, description="Items per page (max 100)"),
     db=Depends(get_db_connection),
     current_user=Depends(get_current_user)
 ):
-    return await ContactGroupCRUD.get_all(db, skip, limit)
+    skip = (page - 1) * per_page
+    
+    # Get total count and items in parallel
+    total = await ContactGroupCRUD.get_total_count(db)
+    items = await ContactGroupCRUD.get_all(db, skip, per_page)
+    
+    total_pages = math.ceil(total / per_page)
+    
+    return PaginatedResponse[ContactGroupResponse](
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages
+    )
 
 
 @router.put("/{contact_group_id}", response_model=ContactGroupResponse)

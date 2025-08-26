@@ -47,6 +47,11 @@ class TriggerCRUD:
         return [TriggerResponse(**dict(row)) for row in rows]
     
     @staticmethod
+    async def get_total_count(db: asyncpg.Connection) -> int:
+        query = "SELECT COUNT(*) FROM triggers"
+        return await db.fetchval(query)
+    
+    @staticmethod
     async def get_by_trigger_string(db: asyncpg.Connection, trigger_string: str) -> Optional[TriggerResponse]:
         query = """
             SELECT id, name, trigger_string, description, group_id, is_active, priority, custom_message, created_at, updated_at

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List
+import math
 from app.database.connection import get_db_connection
 from app.crud.triggers import TriggerCRUD
-from app.schemas.triggers import TriggerCreate, TriggerUpdate, TriggerResponse
+from app.schemas.triggers import TriggerCreate, TriggerUpdate, TriggerResponse, PaginatedResponse
 from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/triggers", tags=["triggers"])
@@ -32,14 +33,28 @@ async def get_trigger(
     return trigger
 
 
-@router.get("/", response_model=List[TriggerResponse])
+@router.get("/", response_model=PaginatedResponse[TriggerResponse])
 async def get_triggers(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    per_page: int = Query(10, ge=1, le=100, description="Items per page (max 100)"),
     db=Depends(get_db_connection),
     current_user=Depends(get_current_user)
 ):
-    return await TriggerCRUD.get_all(db, skip, limit)
+    skip = (page - 1) * per_page
+    
+    # Get total count and items in parallel
+    total = await TriggerCRUD.get_total_count(db)
+    items = await TriggerCRUD.get_all(db, skip, per_page)
+    
+    total_pages = math.ceil(total / per_page)
+    
+    return PaginatedResponse[TriggerResponse](
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages
+    )
 
 
 @router.get("/by-string/{trigger_string}", response_model=TriggerResponse)

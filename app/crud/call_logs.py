@@ -47,6 +47,11 @@ class CallLogCRUD:
         return [CallLogResponse(**dict(row)) for row in rows]
     
     @staticmethod
+    async def get_total_count(db: asyncpg.Connection) -> int:
+        query = "SELECT COUNT(*) FROM call_logs"
+        return await db.fetchval(query)
+    
+    @staticmethod
     async def get_by_email_event_id(db: asyncpg.Connection, email_event_id: str) -> List[CallLogResponse]:
         query = """
             SELECT id, email_event_id, contact_id, phone_number, call_sid, status, duration, attempt_number, error_message, created_at, updated_at
