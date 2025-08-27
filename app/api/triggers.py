@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import List
+from typing import List, Optional
 import math
 from app.database.connection import get_db_connection
 from app.crud.triggers import TriggerCRUD
@@ -21,16 +21,72 @@ async def create_trigger(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{trigger_id}", response_model=TriggerResponse)
-async def get_trigger(
-    trigger_id: str,
+@router.get("/search", response_model=PaginatedResponse[TriggerResponse])
+async def search_triggers(
+    # General search
+    q: Optional[str] = Query(None, description="General search query (searches in name, trigger_string, description, custom_message)"),
+    
+    # Specific field filters
+    name: Optional[str] = Query(None, description="Filter by name (partial match)"),
+    trigger_string: Optional[str] = Query(None, description="Filter by trigger string (partial match)"),
+    description: Optional[str] = Query(None, description="Filter by description (partial match)"),
+    custom_message: Optional[str] = Query(None, description="Filter by custom message (partial match)"),
+    group_id: Optional[str] = Query(None, description="Filter by group ID"),
+    
+    # Status and priority filters
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    priority_min: Optional[int] = Query(None, ge=1, description="Minimum priority"),
+    priority_max: Optional[int] = Query(None, ge=1, description="Maximum priority"),
+    
+    # Pagination
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    per_page: int = Query(10, ge=1, le=100, description="Items per page (max 100)"),
+    
+    # Dependencies
     db=Depends(get_db_connection),
     current_user=Depends(get_current_user)
 ):
-    trigger = await TriggerCRUD.get_by_id(db, trigger_id)
-    if not trigger:
-        raise HTTPException(status_code=404, detail="Trigger not found")
-    return trigger
+    """Search triggers with multiple filters and pagination"""
+    skip = (page - 1) * per_page
+    
+    # Get search results and total count
+    items = await TriggerCRUD.search_triggers(
+        db=db,
+        search_query=q,
+        name_filter=name,
+        trigger_string_filter=trigger_string,
+        description_filter=description,
+        custom_message_filter=custom_message,
+        group_id=group_id,
+        is_active=is_active,
+        priority_min=priority_min,
+        priority_max=priority_max,
+        skip=skip,
+        limit=per_page
+    )
+    
+    total = await TriggerCRUD.get_search_count(
+        db=db,
+        search_query=q,
+        name_filter=name,
+        trigger_string_filter=trigger_string,
+        description_filter=description,
+        custom_message_filter=custom_message,
+        group_id=group_id,
+        is_active=is_active,
+        priority_min=priority_min,
+        priority_max=priority_max
+    )
+    
+    total_pages = math.ceil(total / per_page)
+    
+    return PaginatedResponse[TriggerResponse](
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages
+    )
 
 
 @router.get("/", response_model=PaginatedResponse[TriggerResponse])
@@ -55,6 +111,18 @@ async def get_triggers(
         per_page=per_page,
         total_pages=total_pages
     )
+
+
+@router.get("/{trigger_id}", response_model=TriggerResponse)
+async def get_trigger(
+    trigger_id: str,
+    db=Depends(get_db_connection),
+    current_user=Depends(get_current_user)
+):
+    trigger = await TriggerCRUD.get_by_id(db, trigger_id)
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+    return trigger
 
 
 @router.get("/by-string/{trigger_string}", response_model=TriggerResponse)

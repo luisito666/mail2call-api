@@ -52,6 +52,171 @@ class ContactCRUD:
         return await db.fetchval(query)
     
     @staticmethod
+    async def search_contacts(
+        db: asyncpg.Connection, 
+        search_query: str = None,
+        name_filter: str = None,
+        phone_filter: str = None,
+        role_filter: str = None,
+        department_filter: str = None,
+        is_active: bool = None,
+        priority_min: int = None,
+        priority_max: int = None,
+        group_id: str = None,
+        skip: int = 0, 
+        limit: int = 100
+    ) -> List[ContactResponse]:
+        """Search contacts with multiple filters"""
+        base_query = """
+            SELECT id, name, phone_number, priority, is_active, role, department, group_ids, created_at, updated_at
+            FROM contacts
+        """
+        
+        conditions = []
+        params = []
+        param_counter = 1
+        
+        # General search query (searches in name, phone, role, department)
+        if search_query:
+            search_condition = f"""(
+                LOWER(name) LIKE LOWER(${param_counter}) OR 
+                LOWER(phone_number) LIKE LOWER(${param_counter}) OR
+                LOWER(role) LIKE LOWER(${param_counter}) OR
+                LOWER(department) LIKE LOWER(${param_counter})
+            )"""
+            conditions.append(search_condition)
+            params.append(f"%{search_query}%")
+            param_counter += 1
+        
+        # Specific field filters
+        if name_filter:
+            conditions.append(f"LOWER(name) LIKE LOWER(${param_counter})")
+            params.append(f"%{name_filter}%")
+            param_counter += 1
+            
+        if phone_filter:
+            conditions.append(f"phone_number LIKE ${param_counter}")
+            params.append(f"%{phone_filter}%")
+            param_counter += 1
+            
+        if role_filter:
+            conditions.append(f"LOWER(role) LIKE LOWER(${param_counter})")
+            params.append(f"%{role_filter}%")
+            param_counter += 1
+            
+        if department_filter:
+            conditions.append(f"LOWER(department) LIKE LOWER(${param_counter})")
+            params.append(f"%{department_filter}%")
+            param_counter += 1
+            
+        if is_active is not None:
+            conditions.append(f"is_active = ${param_counter}")
+            params.append(is_active)
+            param_counter += 1
+            
+        if priority_min is not None:
+            conditions.append(f"priority >= ${param_counter}")
+            params.append(priority_min)
+            param_counter += 1
+            
+        if priority_max is not None:
+            conditions.append(f"priority <= ${param_counter}")
+            params.append(priority_max)
+            param_counter += 1
+            
+        if group_id:
+            conditions.append(f"${param_counter} = ANY(group_ids)")
+            params.append(group_id)
+            param_counter += 1
+        
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+            
+        base_query += f" ORDER BY priority ASC, created_at DESC OFFSET ${param_counter} LIMIT ${param_counter + 1}"
+        params.extend([skip, limit])
+        
+        rows = await db.fetch(base_query, *params)
+        return [ContactResponse(**dict(row)) for row in rows]
+    
+    @staticmethod
+    async def get_search_count(
+        db: asyncpg.Connection, 
+        search_query: str = None,
+        name_filter: str = None,
+        phone_filter: str = None,
+        role_filter: str = None,
+        department_filter: str = None,
+        is_active: bool = None,
+        priority_min: int = None,
+        priority_max: int = None,
+        group_id: str = None
+    ) -> int:
+        """Get count of contacts matching search criteria"""
+        base_query = "SELECT COUNT(*) FROM contacts"
+        
+        conditions = []
+        params = []
+        param_counter = 1
+        
+        # General search query (searches in name, phone, role, department)
+        if search_query:
+            search_condition = f"""(
+                LOWER(name) LIKE LOWER(${param_counter}) OR 
+                LOWER(phone_number) LIKE LOWER(${param_counter}) OR
+                LOWER(role) LIKE LOWER(${param_counter}) OR
+                LOWER(department) LIKE LOWER(${param_counter})
+            )"""
+            conditions.append(search_condition)
+            params.append(f"%{search_query}%")
+            param_counter += 1
+        
+        # Specific field filters
+        if name_filter:
+            conditions.append(f"LOWER(name) LIKE LOWER(${param_counter})")
+            params.append(f"%{name_filter}%")
+            param_counter += 1
+            
+        if phone_filter:
+            conditions.append(f"phone_number LIKE ${param_counter}")
+            params.append(f"%{phone_filter}%")
+            param_counter += 1
+            
+        if role_filter:
+            conditions.append(f"LOWER(role) LIKE LOWER(${param_counter})")
+            params.append(f"%{role_filter}%")
+            param_counter += 1
+            
+        if department_filter:
+            conditions.append(f"LOWER(department) LIKE LOWER(${param_counter})")
+            params.append(f"%{department_filter}%")
+            param_counter += 1
+            
+        if is_active is not None:
+            conditions.append(f"is_active = ${param_counter}")
+            params.append(is_active)
+            param_counter += 1
+            
+        if priority_min is not None:
+            conditions.append(f"priority >= ${param_counter}")
+            params.append(priority_min)
+            param_counter += 1
+            
+        if priority_max is not None:
+            conditions.append(f"priority <= ${param_counter}")
+            params.append(priority_max)
+            param_counter += 1
+            
+        if group_id:
+            conditions.append(f"${param_counter} = ANY(group_ids)")
+            params.append(group_id)
+            param_counter += 1
+        
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+            
+        return await db.fetchval(base_query, *params)
+    
+    @staticmethod
     async def get_by_group_id(db: asyncpg.Connection, group_id: str) -> List[ContactResponse]:
         query = """
             SELECT id, name, phone_number, priority, is_active, role, department, group_ids, created_at, updated_at

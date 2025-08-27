@@ -52,6 +52,171 @@ class TriggerCRUD:
         return await db.fetchval(query)
     
     @staticmethod
+    async def search_triggers(
+        db: asyncpg.Connection, 
+        search_query: str = None,
+        name_filter: str = None,
+        trigger_string_filter: str = None,
+        description_filter: str = None,
+        group_id: str = None,
+        is_active: bool = None,
+        priority_min: int = None,
+        priority_max: int = None,
+        custom_message_filter: str = None,
+        skip: int = 0, 
+        limit: int = 100
+    ) -> List[TriggerResponse]:
+        """Search triggers with multiple filters"""
+        base_query = """
+            SELECT id, name, trigger_string, description, group_id, is_active, priority, custom_message, created_at, updated_at
+            FROM triggers
+        """
+        
+        conditions = []
+        params = []
+        param_counter = 1
+        
+        # General search query (searches in name, trigger_string, description, custom_message)
+        if search_query:
+            search_condition = f"""(
+                LOWER(name) LIKE LOWER(${param_counter}) OR 
+                LOWER(trigger_string) LIKE LOWER(${param_counter}) OR
+                LOWER(description) LIKE LOWER(${param_counter}) OR
+                LOWER(custom_message) LIKE LOWER(${param_counter})
+            )"""
+            conditions.append(search_condition)
+            params.append(f"%{search_query}%")
+            param_counter += 1
+        
+        # Specific field filters
+        if name_filter:
+            conditions.append(f"LOWER(name) LIKE LOWER(${param_counter})")
+            params.append(f"%{name_filter}%")
+            param_counter += 1
+            
+        if trigger_string_filter:
+            conditions.append(f"LOWER(trigger_string) LIKE LOWER(${param_counter})")
+            params.append(f"%{trigger_string_filter}%")
+            param_counter += 1
+            
+        if description_filter:
+            conditions.append(f"LOWER(description) LIKE LOWER(${param_counter})")
+            params.append(f"%{description_filter}%")
+            param_counter += 1
+            
+        if custom_message_filter:
+            conditions.append(f"LOWER(custom_message) LIKE LOWER(${param_counter})")
+            params.append(f"%{custom_message_filter}%")
+            param_counter += 1
+            
+        if group_id:
+            conditions.append(f"group_id = ${param_counter}")
+            params.append(group_id)
+            param_counter += 1
+            
+        if is_active is not None:
+            conditions.append(f"is_active = ${param_counter}")
+            params.append(is_active)
+            param_counter += 1
+            
+        if priority_min is not None:
+            conditions.append(f"priority >= ${param_counter}")
+            params.append(priority_min)
+            param_counter += 1
+            
+        if priority_max is not None:
+            conditions.append(f"priority <= ${param_counter}")
+            params.append(priority_max)
+            param_counter += 1
+        
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+            
+        base_query += f" ORDER BY priority ASC, created_at DESC OFFSET ${param_counter} LIMIT ${param_counter + 1}"
+        params.extend([skip, limit])
+        
+        rows = await db.fetch(base_query, *params)
+        return [TriggerResponse(**dict(row)) for row in rows]
+    
+    @staticmethod
+    async def get_search_count(
+        db: asyncpg.Connection, 
+        search_query: str = None,
+        name_filter: str = None,
+        trigger_string_filter: str = None,
+        description_filter: str = None,
+        group_id: str = None,
+        is_active: bool = None,
+        priority_min: int = None,
+        priority_max: int = None,
+        custom_message_filter: str = None
+    ) -> int:
+        """Get count of triggers matching search criteria"""
+        base_query = "SELECT COUNT(*) FROM triggers"
+        
+        conditions = []
+        params = []
+        param_counter = 1
+        
+        # General search query (searches in name, trigger_string, description, custom_message)
+        if search_query:
+            search_condition = f"""(
+                LOWER(name) LIKE LOWER(${param_counter}) OR 
+                LOWER(trigger_string) LIKE LOWER(${param_counter}) OR
+                LOWER(description) LIKE LOWER(${param_counter}) OR
+                LOWER(custom_message) LIKE LOWER(${param_counter})
+            )"""
+            conditions.append(search_condition)
+            params.append(f"%{search_query}%")
+            param_counter += 1
+        
+        # Specific field filters
+        if name_filter:
+            conditions.append(f"LOWER(name) LIKE LOWER(${param_counter})")
+            params.append(f"%{name_filter}%")
+            param_counter += 1
+            
+        if trigger_string_filter:
+            conditions.append(f"LOWER(trigger_string) LIKE LOWER(${param_counter})")
+            params.append(f"%{trigger_string_filter}%")
+            param_counter += 1
+            
+        if description_filter:
+            conditions.append(f"LOWER(description) LIKE LOWER(${param_counter})")
+            params.append(f"%{description_filter}%")
+            param_counter += 1
+            
+        if custom_message_filter:
+            conditions.append(f"LOWER(custom_message) LIKE LOWER(${param_counter})")
+            params.append(f"%{custom_message_filter}%")
+            param_counter += 1
+            
+        if group_id:
+            conditions.append(f"group_id = ${param_counter}")
+            params.append(group_id)
+            param_counter += 1
+            
+        if is_active is not None:
+            conditions.append(f"is_active = ${param_counter}")
+            params.append(is_active)
+            param_counter += 1
+            
+        if priority_min is not None:
+            conditions.append(f"priority >= ${param_counter}")
+            params.append(priority_min)
+            param_counter += 1
+            
+        if priority_max is not None:
+            conditions.append(f"priority <= ${param_counter}")
+            params.append(priority_max)
+            param_counter += 1
+        
+        if conditions:
+            base_query += " WHERE " + " AND ".join(conditions)
+            
+        return await db.fetchval(base_query, *params)
+    
+    @staticmethod
     async def get_by_trigger_string(db: asyncpg.Connection, trigger_string: str) -> Optional[TriggerResponse]:
         query = """
             SELECT id, name, trigger_string, description, group_id, is_active, priority, custom_message, created_at, updated_at

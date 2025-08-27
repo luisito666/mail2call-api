@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import List
+from typing import List, Optional
 import math
 from app.database.connection import get_db_connection
 from app.crud.contacts import ContactCRUD
@@ -21,16 +21,72 @@ async def create_contact(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{contact_id}", response_model=ContactResponse)
-async def get_contact(
-    contact_id: str,
+@router.get("/search", response_model=PaginatedResponse[ContactResponse])
+async def search_contacts(
+    # General search
+    q: Optional[str] = Query(None, description="General search query (searches in name, phone, role, department)"),
+    
+    # Specific field filters
+    name: Optional[str] = Query(None, description="Filter by name (partial match)"),
+    phone: Optional[str] = Query(None, description="Filter by phone number (partial match)"),
+    role: Optional[str] = Query(None, description="Filter by role (partial match)"),
+    department: Optional[str] = Query(None, description="Filter by department (partial match)"),
+    group_id: Optional[str] = Query(None, description="Filter by group ID"),
+    
+    # Status and priority filters
+    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    priority_min: Optional[int] = Query(None, ge=1, description="Minimum priority"),
+    priority_max: Optional[int] = Query(None, ge=1, description="Maximum priority"),
+    
+    # Pagination
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    per_page: int = Query(10, ge=1, le=100, description="Items per page (max 100)"),
+    
+    # Dependencies
     db=Depends(get_db_connection),
     current_user=Depends(get_current_user)
 ):
-    contact = await ContactCRUD.get_by_id(db, contact_id)
-    if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
-    return contact
+    """Search contacts with multiple filters and pagination"""
+    skip = (page - 1) * per_page
+    
+    # Get search results and total count
+    items = await ContactCRUD.search_contacts(
+        db=db,
+        search_query=q,
+        name_filter=name,
+        phone_filter=phone,
+        role_filter=role,
+        department_filter=department,
+        is_active=is_active,
+        priority_min=priority_min,
+        priority_max=priority_max,
+        group_id=group_id,
+        skip=skip,
+        limit=per_page
+    )
+    
+    total = await ContactCRUD.get_search_count(
+        db=db,
+        search_query=q,
+        name_filter=name,
+        phone_filter=phone,
+        role_filter=role,
+        department_filter=department,
+        is_active=is_active,
+        priority_min=priority_min,
+        priority_max=priority_max,
+        group_id=group_id
+    )
+    
+    total_pages = math.ceil(total / per_page)
+    
+    return PaginatedResponse[ContactResponse](
+        items=items,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages
+    )
 
 
 @router.get("/", response_model=PaginatedResponse[ContactResponse])
@@ -55,6 +111,18 @@ async def get_contacts(
         per_page=per_page,
         total_pages=total_pages
     )
+
+
+@router.get("/{contact_id}", response_model=ContactResponse)
+async def get_contact(
+    contact_id: str,
+    db=Depends(get_db_connection),
+    current_user=Depends(get_current_user)
+):
+    contact = await ContactCRUD.get_by_id(db, contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return contact
 
 
 @router.get("/by-group/{group_id}", response_model=List[ContactResponse])
